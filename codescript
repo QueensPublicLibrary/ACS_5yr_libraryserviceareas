@@ -1075,13 +1075,13 @@ write.csv(birth_countries_summary, "birth_countries.csv")
 
 #getting denominators
 denom_pop <- get_acs(geography = "tract",
-                     year = 2021, table = c("B01003"),
+                     year = 2022, table = c("B01003"),
                      state = "NY", county = c("Queens"),
                      survey = "acs5",
                      geometry = TRUE, output = "wide")
 
 denom_pop_5_and_over <- get_acs(geography = "tract",
-                                year = 2021, table = c("B16004"),
+                                year = 2022, table = c("B16004"),
                                 state = "NY", county = c("Queens"),
                                 survey = "acs5",
                                 geometry = TRUE, output = "wide")
@@ -1090,37 +1090,37 @@ denom_pop_5_and_over <- get_acs(geography = "tract",
 
 #population ages 25 and older
 denom_pop_25_and_over <- get_acs(geography = "tract",
-                                 year = 2021, table = c("B15003"),
+                                 year = 2022, table = c("B15003"),
                                  state = "NY", county = c("Queens"),
                                  survey = "acs5",
                                  geometry = TRUE, output = "wide")
 
 denom_pop_poverty <- get_acs(geography = "tract",
-                             year = 2021, table = c("B17020"),
+                             year = 2022, table = c("B17020"),
                              state = "NY", county = c("Queens"),
                              survey = "acs5",
                              geometry = TRUE, output = "wide")
 
 denom_hh <- get_acs(geography = "tract",
-                    year = 2021, table = c("B11012"),
+                    year = 2022, table = c("B11012"),
                     state = "NY", county = c("Queens"),
                     survey = "acs5",
                     geometry = TRUE, output = "wide")
 
 denom_family_hh <- get_acs(geography = "tract",
-                           year = 2021, table = c("B11003"),
+                           year = 2022, table = c("B11003"),
                            state = "NY", county = c("Queens"),
                            survey = "acs5",
                            geometry = TRUE, output = "wide")
 
 denom_perc_of_pop_18_and_over <- get_acs(geography = "tract",
-                                         year = 2021, table = c("B21001"),
+                                         year = 2022, table = c("B21001"),
                                          state = "NY", county = c("Queens"),
                                          survey = "acs5",
                                          geometry = TRUE, output = "wide")
 
 denom_total_civilian_noninstitutionalized_population <- get_acs(geography = "tract",
-                                                                year = 2021, table = c("S1810"),
+                                                                year = 2022, table = c("S1810"),
                                                                 state = "NY", county = c("Queens"),
                                                                 survey = "acs5",
                                                                 geometry = TRUE, output = "wide")
