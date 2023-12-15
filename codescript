@@ -1,3 +1,5 @@
+#load packages
+
 library(tidycensus)
 library(dplyr)
 library(tidyverse)
@@ -6,8 +8,6 @@ library(lubridate)
 library(sf)
 library(survey)
 
-
-library(dplyr)
 
 #load variables from 2022 5- Year ACS tables
 v_22 <- load_variables(2022,"acs5",cache=T) %>% mutate(table=str_sub(name,1,6))
