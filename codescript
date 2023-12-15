@@ -1,0 +1,1305 @@
+library(tidycensus)
+library(dplyr)
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+library(sf)
+library(survey)
+
+
+library(dplyr)
+
+#load variables from 2022 5- Year ACS tables
+v_22 <- load_variables(2022,"acs5",cache=T) %>% mutate(table=str_sub(name,1,6))
+v_22s <- load_variables(2022,"acs5/subject",cache=T) %>% mutate(table=str_sub(name,1,6))
+
+#input your personal census api key. it can be obtained here: https://api.census.gov/data/key_signup.html
+census_api_key("paste api key here")
+
+#upload census tract assignments
+branches <-read_csv("tract_to_branch_2020.csv")
+
+#get tract-level population data of census tracts in Queens
+population <-get_acs(geography = "tract",
+                     year = 2022, table =c("B01003"),
+                     state = "NY", county = c("Queens"),
+                     survey = "acs5",
+                     geometry = TRUE, output="wide")
+
+# get tract-level household data of census tracts in Queens
+households <- get_acs(geography = "tract",
+                      year = 2022, table = c("B11012"),
+                      state = "NY", county = c("Queens"),
+                      survey = "acs5",
+                      geometry = TRUE, output="wide")
+
+#group population and household data by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_pop_hh <- branches %>% 
+  left_join(households, by="GEOID") %>%
+  left_join(population, by="GEOID")
+
+#sum population and household data by library service area
+branches_pop_hh_summary <- branches_pop_hh %>%
+  group_by(Branch) %>%
+  summarize(total_queens_population = sum(B01003_001E),
+            households = sum(B11012_001E))
+
+
+
+#save output to csv
+write.csv(branches_pop_hh_summary, "branches_pop_hh_summary.csv")
+
+#get male/female data of census tracts in Queens
+branches_sex <- get_acs(geography = "tract",
+                        year = 2022, table = c("B01001"),
+                        state = "NY", county = c("Queens"),
+                        survey = "acs5",
+                        geometry = TRUE, output="wide")
+
+#group male/female data by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_sex_m_f <- branches %>% left_join(branches_sex, by="GEOID") 
+
+#sum male/female data by library service area
+branches_sex_m_f_summary <- branches_sex_m_f %>%
+  group_by(Branch) %>%
+  summarize(
+    total_population = sum(B01001_001E),
+    male = sum(B01001_002E),
+    male_pct = sum(B01001_002E) / total_population,
+    female = sum(B01001_026E),
+    female_pct = sum(B01001_026E) / total_population
+  ) 
+
+
+#save output to csv
+write.csv(branches_sex_m_f_summary, "branches_sex_m_f.csv")
+
+#get tract-level race data for census tracts in Queens
+race <- get_acs(geography = "tract",
+                year = 2022, table = c("B02001"),
+                state = "NY", county = c("Queens"),
+                survey = "acs5",
+                geometry = TRUE, output="wide")
+
+#group race data by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_race <- branches %>% left_join(race, by="GEOID") 
+
+#group race data by library service area
+branches_race_summary <- branches_race %>%
+  group_by(Branch) %>%
+  summarize(total_race_population = sum(B02001_001E),
+            white = sum(B02001_002E),
+            white_pct = sum(B02001_002E)/total_race_population,
+            black = sum(B02001_003E),
+            black_pct = sum(B02001_003E)/total_race_population,
+            asian = sum(B02001_003E),
+            asian_pct = sum(B02001_003E)/total_race_population,
+            american_indian_alaskan_native = sum(B02001_004E),
+            american_indian_alaskan_native_pct = sum(B02001_004E)/total_race_population,
+            native_hawaiian_other_pacific_islander = sum(B02001_006E),
+            native_hawaiian_other_pacific_islander_pct = sum(B02001_006E)/total_race_population,
+            some_other_race = sum(B02001_007E),
+            some_other_race_pct = sum(B02001_007E)/total_race_population,
+            two_or_more_races = sum(B02001_008E),
+            two_or_more_races_pct = sum(B02001_008E)/total_race_population)
+
+#save to csv
+write.csv(branches_race_summary, "branches_race_summary.csv")
+
+
+#get tract-level data on population hispanic or latino origin
+hispanic <- get_acs(geography = "tract",
+                    year = 2022, table = c("B03003"),
+                    state = "NY", county = c("Queens"),
+                    survey = "acs5",
+                    geometry = TRUE, output="wide")
+
+
+#group data on hispanic/latino origin population by branch census tract assignments
+branches_hispanic <- branches %>% left_join(hispanic, by="GEOID")     
+
+#group data on hispanic/latino origin population by library service area
+branches_hispanic_summary <- branches_hispanic %>%
+  group_by(Branch) %>%
+  summarize(total_population_hispanic_table = sum(B03003_001E),
+            hispanic = sum(B03003_003E),
+            hispanic_pct = sum(B03003_003E)/total_population_hispanic_table)
+
+
+
+#write to csv file
+write.csv(branches_hispanic_summary, "hispanic_summary.csv")
+
+
+#get tract-level data on non hispanic or latino races
+non_hispanic <- get_acs(geography = "tract",
+                          year = 2022, table = c("B03002"),
+                          state = "NY", county = c("Queens"),
+                          survey = "acs5",
+                          geometry = TRUE, output="wide")
+
+#group data on non hispanic by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_non_hispanic <- branches %>% left_join(non_hispanic, by="GEOID")
+
+
+#group data by on hispanic or latino origin by library service area
+branches_non_hispanic_summary <- branches_non_hispanic %>%
+  group_by(Branch) %>%
+  summarize(total_nonhispanic = sum(B03002_001E),
+            white_nonhispanic = sum(B03002_003E),
+            white_nonhispanic_pct = sum(B03002_003E)/total_nonhispanic,
+            black_nonhispanic = sum(B03002_004E),
+            black_nonhispanic_pct = sum(B03002_004E)/total_nonhispanic,
+            asian_nonhispanic = sum(B03002_006E),
+            asian_nonhispanic_pct = sum(B03002_006E)/total_nonhispanic,
+            native_hawaiian_nonhispanic = sum(B03002_007E),
+native_hawaiian_nonhispanic_pct = sum(B03002_007E)/total_nonhispanic,
+some_other_race = sum(B03002_008E),
+some_other_race_pct = sum(B03002_008E)/total_nonhispanic,
+two_or_more_races = sum(B03002_009E),
+two_or_more_races_pct = sum(B03002_009E)/total_nonhispanic,
+            hispanic = sum(B03002_012E),
+            hispanic_pct= sum(B03002_012E)/total_nonhispanic)
+
+
+write.csv(branches_race_summary, "branches_race_summary.csv")
+
+#get tract-level data on age distribution in Queens
+ages <- get_acs(geography = "tract",
+                year = 2022, table = c("B01001"),
+                state = "NY", county = c("Queens"),
+                survey = "acs5",
+                geometry = TRUE, output="wide")
+
+#group data on age distributions by branch census tract assignments
+branches_ages <- branches %>% left_join(ages, by="GEOID")  
+
+#group data by on age distributions by library service area
+branches_ages_summary <- branches_ages %>%
+  group_by(Branch) %>%
+  summarize(total_age_table = sum(B01001_001E),
+            under_5_pct = sum(B01001_003E, B01001_027E)/total_age_table,
+            five_to_9_pct = sum(B01001_004E, B01001_028E)/total_age_table,
+            ten_to_14_pct= sum(B01001_005E, B01001_029E)/total_age_table,
+            fifteen_to_19_pct = sum(B01001_006E, B01001_030E, B01001_007E, B01001_031E)/total_age_table,
+            twenty_to_29_pct = sum(B01001_008E, B01001_032E, B01001_009E, B01001_033E, B01001_010E, B01001_034E, B01001_011E, B01001_035E)/total_age_table,
+            thirty_to_44_pct = sum(B01001_012E, B01001_036E, B01001_013E, B01001_037E, B01001_014E, B01001_038E)/total_age_table,
+            fortyfive_to_64_pct = sum(B01001_015E, B01001_039E, B01001_016E, B01001_040E, B01001_017E, B01001_041E, B01001_018E, B01001_042E, B01001_019E, B01001_043E)/total_age_table,
+            sixtyfive_older_pct = sum(B01001_020E, B01001_044E, B01001_021E, B01001_045E, B01001_022E, B01001_046E, B01001_023E, B01001_047E, B01001_024E, B01001_048E, B01001_025E, B01001_049E)/total_age_table,
+            under_5 = sum(B01001_003E, B01001_027E),
+            five_to_9 = sum(B01001_004E, B01001_028E),
+            ten_to_14= sum(B01001_005E, B01001_029E),
+            fifteen_to_19 = sum(B01001_006E, B01001_030E, B01001_007E, B01001_031E),
+            twenty_to_29 = sum(B01001_008E, B01001_032E, B01001_009E, B01001_033E, B01001_010E, B01001_034E, B01001_011E, B01001_035E),
+            thirty_to_44 = sum(B01001_012E, B01001_036E, B01001_013E, B01001_037E, B01001_014E, B01001_038E),
+            fortyfive_to_64 = sum(B01001_015E, B01001_039E, B01001_016E, B01001_040E, B01001_017E, B01001_041E, B01001_018E, B01001_042E, B01001_019E, B01001_043E),
+            sixtyfive_older = sum(B01001_020E, B01001_044E, B01001_021E, B01001_045E, B01001_022E, B01001_046E, B01001_023E, B01001_047E, B01001_024E, B01001_048E, B01001_025E, B01001_049E))
+
+#write age data output to csv
+write.csv(branches_ages_summary, "branches_ages_summary.csv")
+
+#get tract-level data on education levels in Queens
+education <- get_acs(geography = "tract",
+                     year = 2022, table = c("B15003"),
+                     state = "NY", county = c("Queens"),
+                     survey = "acs5",
+                     geometry = TRUE, output="wide")
+
+#group data on education levels by branch census tract assignments
+branches_education <- branches %>% left_join(education, by="GEOID") 
+
+#group data by on age distributions by library service area
+branches_edu_summary <- branches_education %>%
+  group_by(Branch) %>%
+  summarize(total_edu = sum(B15003_001E),
+            hs_diploma_hse_pct = sum(B15003_019E, B15003_020E)/total_edu,
+            some_college_pct = sum(B15003_019E, B15003_020E)/total_edu,
+            associates_degree_pct = sum(B15003_021E)/total_edu,
+            bachelors_degree_pct = sum(B15003_022E)/total_edu,
+            grad_or_professional_degree_pct = sum(B15003_023E, B15003_024E, B15003_025E)/total_edu,
+            less_than_hs_pct = sum(B15003_002E, B15003_003E, B15003_004E, B15003_005E, B15003_006E, B15003_007E, B15003_008E, B15003_009E, B15003_010E, B15003_011E, B15003_012E, B15003_013E, B15003_014E, B15003_015E, B15003_016E)/total_edu,
+            hs_diploma_hse = sum(B15003_019E, B15003_020E),
+            some_college = sum(B15003_019E, B15003_020E),
+            associates_degree = sum(B15003_021E),
+            bachelors_degree = sum(B15003_022E),
+            grad_or_professional_degree = sum(B15003_023E, B15003_024E, B15003_025E),
+            less_than_hs = sum(B15003_002E, B15003_003E, B15003_004E, B15003_005E, B15003_006E, B15003_007E, B15003_008E, B15003_009E, B15003_010E, B15003_011E, B15003_012E, B15003_013E, B15003_014E, B15003_015E, B15003_016E))
+
+
+
+#write to csv
+write.csv(branches_edu_summary, "branches_edu_summary.csv")
+
+#get Queens tract-level data for household languages
+hh_languages <- get_acs(geography = "tract",
+                        year = 2022, table = c("C16002"),
+                        state = "NY", county = c("Queens"),
+                        survey = "acs5",
+                        geometry = TRUE, output="wide")
+
+#group data on household languages by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_languages <- branches %>% left_join(hh_languages, by="GEOID") 
+
+#group data by on household languages by library service area
+branches_languages_summary <- branches_languages %>%
+  group_by(Branch) %>%
+  summarize(total_lang = sum(C16002_001E),
+            english_pct = sum(C16002_002E)/total_lang,
+            spanish_pct = sum(C16002_003E)/total_lang,
+            other_indo_european_pct = sum(C16002_006E)/total_lang,
+            asian_pi_pct = sum(C16002_009E)/total_lang,
+            other_pct = sum(C16002_012E)/total_lang,
+            english = sum(C16002_002E),
+            spanish = sum(C16002_003E),
+            other_indo_european = sum(C16002_006E),
+            asian_pi = sum(C16002_009E),
+            other = sum(C16002_012E))
+
+
+#write to csv 
+write.csv(branches_languages_summary, "branches_languages_summary.csv")
+
+#get Queens tract-level LEP data
+lep <- get_acs(geography = "tract",
+               year = 2022, table = c("B16004"),
+               state = "NY", county = c("Queens"),
+               survey = "acs5",
+               geometry = TRUE, output="wide")
+
+#group data on LEP by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_lep <- branches %>% left_join(lep, by="GEOID") 
+
+#group LEP data by library service area
+branches_lep_summary <- branches_lep %>%
+  group_by(Branch) %>%
+  summarize(total_lep = sum(B16004_001E),
+            lep_pct = sum(B16004_006E, B16004_007E, B16004_008E, B16004_011E, B16004_012E, B16004_013E, B16004_016E, B16004_017E, B16004_018E, B16004_021E, B16004_022E, B16004_023E, B16004_028E, B16004_029E, B16004_030E, B16004_033E, B16004_034E, B16004_035E, B16004_038E, B16004_039E, B16004_040E, B16004_043E, B16004_044E, B16004_045E, B16004_050E, B16004_051E, B16004_052E, B16004_055E, B16004_056E, B16004_057E, B16004_060E, B16004_061E, B16004_062E, B16004_065E, B16004_066E, B16004_067E)/total_lep,
+            lep = sum(B16004_006E, B16004_007E, B16004_008E, B16004_011E, B16004_012E, B16004_013E, B16004_016E, B16004_017E, B16004_018E, B16004_021E, B16004_022E, B16004_023E, B16004_028E, B16004_029E, B16004_030E, B16004_033E, B16004_034E, B16004_035E, B16004_038E, B16004_039E, B16004_040E, B16004_043E, B16004_044E, B16004_045E, B16004_050E, B16004_051E, B16004_052E, B16004_055E, B16004_056E, B16004_057E, B16004_060E, B16004_061E, B16004_062E, B16004_065E, B16004_066E, B16004_067E))
+
+
+
+#write to csv
+write.csv(branches_lep_summary, "branches_lep_summary.csv")
+
+#get Queens tract-level data on foreign-born
+foreign_born <- get_acs(geography = "tract",
+                        year = 2022, table = c("B05012"),
+                        state = "NY", county = c("Queens"),
+                        survey = "acs5",
+                        geometry = TRUE, output="wide")
+
+#group data on foreign-born by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_foreign_born <- branches %>% left_join(foreign_born, by="GEOID") 
+
+#group data on foreign-born by library service area
+branches_foreign_born_summary <- branches_foreign_born %>%
+  group_by(Branch) %>%
+  summarize(total_foreign_born_table = sum(B05012_001E),
+            foreign_born_pct = sum(B05012_003E)/total_foreign_born_table,
+            foreign_born = sum(B05012_003E))
+
+#write to csv
+write.csv(branches_foreign_born_summary, "branches_foreign_born_summary.csv")
+
+#get Queens tract-level income dat a 
+income <- get_acs(geography = "tract",
+                  year = 2022, table = c("B19001"),
+                  state = "NY", county = c("Queens"),
+                  survey = "acs5",
+                  geometry = TRUE, output="wide")
+
+#group income level data by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_income <- branches %>% left_join(income, by="GEOID") 
+
+#group data on income levels by library service area
+branches_income_summary <- branches_income %>%
+  group_by(Branch) %>%
+  summarize(total_income_table = sum(B19001_001E),
+            less_than_24999_pct = sum(B19001_002E, B19001_003E, B19001_004E, B19001_005E)/total_income_table,
+            twentyfivek_to_49999_pct = sum(B19001_006E, B19001_007E, B19001_008E, B19001_009E, B19001_010E)/total_income_table,
+            fiftyk_to_99999_pct = sum(B19001_011E, B19001_012E, B19001_013E)/total_income_table,
+            onehundredk_and_up_pct = sum(B19001_014E, B19001_015E, B19001_016E, B19001_017E)/total_income_table,
+            less_than_24999 = sum(B19001_002E, B19001_003E, B19001_004E, B19001_005E),
+            twentyfivek_to_49999 = sum(B19001_006E, B19001_007E, B19001_008E, B19001_009E, B19001_010E),
+            fiftyk_to_99999 = sum(B19001_011E, B19001_012E, B19001_013E),
+            onehundredk_and_up = sum(B19001_014E, B19001_015E, B19001_016E, B19001_017E))
+
+
+
+
+
+#write to csv
+write.csv(branches_income_summary, "branches_income_summary.csv")
+
+#get Queens tract-level data on poverty
+poverty <- get_acs(geography = "tract",
+                   year = 2022, table = c("B17020"),
+                   state = "NY", county = c("Queens"),
+                   survey = "acs5",
+                   geometry = TRUE, output="wide")
+
+#group data on poverty by branch census tract assignments
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branches_poverty <- branches %>% left_join(poverty, by="GEOID") 
+
+#group data on poverty by library service area
+
+branches_poverty_summary <- branches_poverty %>%
+  group_by(Branch) %>%
+  summarize(total_poverty_table = sum(B17020_001E, na.rm = TRUE),
+            poverty_pct = sum(B17020_002E, na.rm = TRUE)/total_poverty_table ,
+            poverty = sum(B17020_002E, na.rm = TRUE))
+
+#write to csv
+write.csv(branches_poverty_summary, "branches_poverty_summary.csv")
+
+
+#unemployment data
+unemployment <- get_acs(geography = "tract",
+                        year = 2022, table = c("S2301_C04"),
+                        state = "NY", county = c("Queens"),
+                        survey = "acs5",
+                        geometry = TRUE, output="wide")
+
+unemployment_qns <- get_acs(geography = "county",
+                        year = 2022, table = c("S2301_C04"),
+                        state = "NY", county = c("Queens"),
+                        survey = "acs5",
+                        geometry = TRUE, output="wide")
+
+#group unemployment data by branch
+branches_unemployment <- branches %>% left_join(unemployment, by="GEOID")
+
+#summarize unemployment data by branch
+
+unemployment_branches_summary <- branches_unemployment %>%
+  group_by(Branch) %>%
+  summarize(unemployment_rate = mean(S2301_C04_001E, na.rm = TRUE))
+
+#write to csv
+write.csv(unemployment_branches_summary, "unemployment.csv")
+
+#get median hh income
+median_hh_income <- get_acs(geography = "tract",
+                            year = 2022, table = c("B19013"),
+                            state = "NY", county = c("Queens"),
+                            survey = "acs5",
+                            geometry = TRUE, output="wide")
+
+#group median hh income by branch
+branches_median_hh_income <- branches %>% left_join(median_hh_income, by="GEOID")
+
+#summarize median hh income data by branch
+branches_median_hh_income_summary <- branches_median_hh_income %>%
+  group_by(Branch) %>%
+  summarize(median_hh_income = weighted.mean(B19013_001E, na.rm = TRUE))
+
+#write median hh income to csv
+write.csv(branches_median_hh_income_summary, "median_hh_income_tracts.csv")
+
+#get Queens tract-level data on avg hh size
+avg_hh_size <- get_acs(geography = "tract",
+                       year = 2022, table = c("S1101_C01"),
+                       state = "NY", county = c("Queens"),
+                       survey = "acs5",
+                       geometry = TRUE, output="wide")
+
+#group data on avg hh size by branch census tract assignments
+branches_avg_hh_size <- branches %>% left_join(avg_hh_size, by="GEOID")
+
+#group data on avg hh size by library service area
+branches_avg_hh_size_summary <- branches_avg_hh_size %>%
+  group_by(Branch) %>%
+  summarize(avg_hh_size = mean(S1101_C01_002E, na.rm = TRUE)) 
+
+#write to csv
+write.csv(branches_avg_hh_size_summary, "avg_hh_size.csv")
+
+#get Queens tract-level data on hh under 18 y.o./h.h., any 60 years and over, hh living alone
+hh_and_families <- get_acs(geography = "tract",
+                           year = 2022, table = c("S1101_C01"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output="wide")
+
+#group data on hh under 18 y.o. branch census tract assignments
+branches_hh_under_18 <- branches %>% left_join(hh_and_families, by="GEOID")
+
+branches_hh_under_18_summary <- branches_hh_under_18 %>%
+  group_by(Branch) %>%
+  summarize(hh_under_18_yo = mean(S1101_C01_010E), na.rm = TRUE) 
+
+write.csv(branches_hh_under_18_summary, "hh_under_18.csv")
+
+#group data by hh over 60
+branches_hh_over_60 <- branches %>% left_join(hh_and_families, by="GEOID")
+
+branches_hh_over_60_summary <- branches_hh_over_60 %>%
+  group_by(Branch) %>%
+  summarize(hh_over_60_yo = mean(S1101_C01_011E), na.rm = TRUE) 
+
+#write to csv file                                                              
+write.csv(branches_hh_over_60_summary, "hh_over_60.csv")
+
+#get data on hh living alone
+hh_living_alone <- get_acs(geography = "tract",
+                           year = 2022, table = c("B11001"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output="wide")
+
+hh_living_alone <- get_acs(geography = "tract",
+                           year = 2022, table = c("B09019"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output="wide")
+
+
+#get data on hh living alone
+branches_hh_living_alone <- branches %>% left_join(hh_living_alone, by="GEOID")
+
+branches_hh_living_alone_summary <- branches_hh_living_alone %>%
+  group_by(Branch) %>%
+  summarize(total_in_households = sum(B09019_003E), living_alone = sum(B09019_005E, B09019_008E), pct_alone = living_alone/total_in_households)
+
+#write to csv file                                                              
+write.csv(branches_hh_living_alone_summary, "hh_living_alone.csv")
+
+
+
+#Get data on hh with children
+hh_with_children <- get_acs(geography = "tract",
+                            year = 2022, table = c("B23007"),
+                            state = "NY", county = c("Queens"),
+                            survey = "acs5",
+                            geometry = TRUE, output="wide")
+
+#group by branch
+branches_hh_with_children <- branches %>% left_join(hh_with_children, by="GEOID") %>%
+  left_join(households, by="GEOID")
+
+branches_hh_with_children_summary <- branches_hh_with_children %>%
+  group_by(Branch) %>%
+  summarize(total_with_children_table = sum(B23007_001E),
+            total_hh = sum(B11012_001E),
+            hh_with_children_pct = sum(B23007_002E)/total_hh,
+            hh_with_children = sum(B23007_002E))
+
+
+
+
+
+write.csv(branches_hh_with_children_summary, "branches_hh_with_children_summary.csv")
+
+renter_occupied_housing <- get_acs(geography = "tract",
+                      year = 2022, table = c("B25003"),
+                      state = "NY", county = c("Queens"),
+                      survey = "acs5",
+                      geometry = TRUE, output = "wide")
+
+#group data on renter occupied housing by branch tract assignments  
+branches_ro_housing <- branches %>% left_join(ro_housing, by="GEOID")
+
+#summarize roh data by branches
+branches_ro_housing_summary <- branches_ro_housing %>%
+  group_by(Branch) %>%
+  summarize(total_ro_table = sum(B25003_001E),
+            renter_occupied_housing_pct = sum(B25003_003E)/total_ro_table,
+            renter_occupied_housing = sum(B25003_003E))
+
+#write to csv file                                                              
+write.csv(branches_ro_housing_summary, "branches_ro_housing_summary.csv")
+
+#get Queens tract-level data on non-family hh                                   
+non_family_hh <- get_acs(geography = "tract",
+                         year = 2022, table = c("B11016"),
+                         state = "NY", county = c("Queens"),
+                         survey = "acs5",
+                         geometry = TRUE, output = "wide")
+
+#group data on non-family hh by branch census tract assignments               
+branches_non_family_hh <- branches %>% left_join(non_family_hh, by="GEOID")
+
+#group data on non-family hh by library service area
+branches_non_family_hh_summary <- branches_non_family_hh %>%
+  group_by(Branch) %>%
+  summarize(total_non_family_table = sum(B11016_001E), 
+            non_family_households_pct = sum(B11016_009E)/total_non_family_table,
+            non_family_households = sum(B11016_009E))
+
+
+#write to csv file
+write.csv(branches_non_family_hh_summary, "branches_non_family_hh_summary.csv")
+
+#data on single family hh in queens
+single_family_hh <- get_acs(geography = "tract",
+                            year = 2022, table = c("B11003"),
+                            state = "NY", county = c("Queens"),
+                            survey = "acs5",
+                            geometry = TRUE, output = "wide")
+
+#group data on single family headed hh by branch census tract assignments
+branches_single_family_hh <- branches %>% left_join(single_family_hh, by="GEOID")
+
+#group data on single family headed hh by library service area
+branches_single_family_hh_summary <-  branches_single_family_hh %>%
+  group_by(Branch) %>%
+  summarize(total_single_family_hh_table = sum(B11003_001E),
+            single_family_headed_households_pct = sum(B11003_008E)/total_single_family_hh_table,
+            single_family_headed_households = sum(B11003_008E))
+
+
+
+#write to csv file
+write.csv(branches_single_family_hh_summary, "branches_single_family_hh_summary.csv")
+
+#get Queens tract-level data on hh with internet access                         
+
+hh_with_internet <- get_acs(geography = "tract",
+                            year = 2022, table = c("B28002"),
+                            state = "NY", county = c("Queens"),
+                            survey = "acs5",
+                            geometry = TRUE, output = "wide")
+
+#get Queens tract-level data on hh with computers
+hh_with_computer <- get_acs(geography = "tract",
+                            year = 2022, table = c("B28001"),
+                            state = "NY", county = c("Queens"),
+                            survey = "acs5",
+                            geometry = TRUE, output = "wide")
+
+
+#group data on hh with internet access and hh with computers by branch census tract assignments
+branches_internet_computers <- branches %>% left_join(hh_with_computer, by="GEOID") %>%
+  left_join(hh_with_internet, by="GEOID")
+
+
+#group data on hh with internet access and hh with computers by library service area
+branches_internet_computer_summary <- branches_internet_computer %>% 
+  group_by(Branch) %>%
+  summarize(total_internet = sum(B28002_001E),
+            broadband_pct = sum(B28002_004E)/total_internet,
+            broadband= sum(B28002_004E),
+            dialup_other_pct = sum(B28002_003E, B28002_012E)/total_internet,
+            dialup_other = sum(B28002_003E, B28002_012E),
+            no_internet = sum(B28002_013E)/total_internet,
+            no_internet_pct = sum(B28002_013E),
+            internet_acces_without_subscription = sum(B28002_012E),
+            internet_access_without_subscription = sum(B28002_012E)/total_internet,
+            with_internet_subscription = sum(B28002_002),
+            with_internet_subscription_pct = sum(B28002_002E)/total_internet,
+            total_computers = sum(B28001_001E),
+            deskop_laptop_pct = sum(B28001_003E)/total_computers,
+            deskop_laptop = sum(B28001_003E),
+            smartphone_pct = sum(B28001_005E)/total_computers,
+            smartphone = sum(B28001_005E),
+            smartphone_only_pct = sum(B28001_006E)/total_computers,
+            smartphone_only = sum(B28001_006E),
+            tablet_pct = sum(B28001_007E)/total_computers,
+            tablet = sum(B28001_007E),
+            no_computer_pct = sum(B28001_011E)/total_computers,
+            no_computer = sum(B28001_011E)
+
+branches_internet_computer_summary <- branches_internet_computers_2021 %>%
+  group_by(Branch) %>%
+  summarize(total_internet = sum(B28002_001E),
+            broadband_pct = sum(B28002_004E)/total_internet,
+            broadband= sum(B28002_004E),
+            dialup_other_pct = sum(B28002_003E, B28002_012E)/total_internet,
+            dialup_other = sum(B28002_003E, B28002_012E),
+            no_internet = sum(B28002_013E)/total_internet,
+            no_internet_pct = sum(B28002_013E),
+            total_computers = sum(B28001_001E),
+            deskop_laptop_pct = sum(B28001_003E)/total_computers,
+            deskop_laptop = sum(B28001_003E),
+            smartphone_pct = sum(B28001_005E)/total_computers,
+            smartphone = sum(B28001_005E),
+            smartphone_only_pct = sum(B28001_006E)/total_computers,
+            smartphone_only = sum(B28001_006E),
+            tablet_pct = sum(B28001_007E)/total_computers,
+            tablet = sum(B28001_007E),
+            no_computer_pct = sum(B28001_011E)/total_computers,
+            no_computer = sum(B28001_011E))
+
+
+branches_internet_computer_summary <- branches_internet_computers %>%
+  group_by(Branch) %>%
+  summarize(total_households = sum(B28002_001E),
+            internet_subscription = sum(B28002_002E), internet_subscription_pct = sum(B28002_002E)/total_households,
+            internet_access_no_subscription = sum(B28002_012E), internet_access_no_subscription_pct = sum(B28002_012E)/total_households,
+            no_internet = sum(B28002_013E), no_internet_pct = sum(B28002_013E)/total_households)
+
+
+branches_device_type <- branches_internet_computers_2021 %>%
+  group_by(Branch) %>%
+  summarize(total_computers = sum(B28001_001E),
+            deskop_laptop_pct = sum(B28001_003E)/total_computers,
+            deskop_laptop = sum(B28001_003E),
+            smartphone_pct = sum(B28001_005E)/total_computers,
+            smartphone = sum(B28001_005E),
+            smartphone_only_pct = sum(B28001_006E)/total_computers,
+            smartphone_only = sum(B28001_006E),
+            tablet_pct = sum(B28001_007E)/total_computers,
+            tablet = sum(B28001_007E),
+            other = sum(B28001_009E),
+            other_pct = sum(B28001_009E)/total_computers,
+            any_computer = sum(B28001_002E),
+            any_computer_pct = sum(B28001_002E)/total_computers,
+            no_computer_pct = sum(B28001_011E)/total_computers,
+            no_computer = sum(B28001_011E))
+
+write.csv(branches_device_type, "branches_devices.csv")
+
+#write to csv file
+write.csv(branches_internet_computer_summary, "branches_internet_computer_summary.csv")
+
+#get data on veterans
+veterans <-get_acs(geography = "tract",
+                   year = 2022, table =c("B21001"),
+                   state = "NY", county = c("Queens"),
+                   survey = "acs5",
+                   geometry = TRUE, output="wide")
+
+#merge nta_name data with veterans data
+branches_veterans<- branches %>% left_join(veterans, by="GEOID") 
+
+#sum data by library service area
+branches_veterans_summary <- branches_veterans %>%
+  group_by(Branch) %>%
+  summarize(population_veterans_table = sum(B21001_001E),
+            veterans_pct = sum(B21001_002E)/population_veterans_table,
+            veterans = sum(B21001_002E))
+
+
+
+#write out to a csv for future use
+write_csv(branches_veterans_summary, "branches_veterans_summary.csv") 
+
+
+#get data on % of civilian noninstutitionalized population with disability
+disability <-get_acs(geography = "tract",
+                     year = 2022, table =c("S1810"),
+                     state = "NY", county = c("Queens"),
+                     survey = "acs5",
+                     geometry = TRUE, output="wide")
+
+#merge branch data with disability data
+branches_disability<- branches %>% left_join(disability, by="GEOID") 
+
+#sum data by library service area
+branches_disability_summary <- branches_disability %>%
+  group_by(Branch) %>%
+  summarize(population_disability_table = sum(S1810_C01_001E), 
+            with_disability_pct = sum(S1810_C02_001E)/population_disability_table,
+            with_disability = sum(S1810_C02_001E),
+            hearing_disability = sum(S1810_C02_019E),
+        hearing_disability_pct = sum(S1810_C02_019E)/with_disability,
+        vision_disability = sum(S1810_C02_029E),
+        vision_disability_pct = sum(S1810_C02_029E)/with_disability,
+        cognitive_disability = sum(S1810_C02_039E),
+  cognitive_disability_pct = sum(S1810_C02_039E)/with_disability,
+ambulatory_disability = sum(S1810_C02_047E)
+ambultatory_disability_pct = sum(S1810_C02_047E)/with_disability,
+self_care_disability = sum(S1810_C02_055E),
+self_care_disability_pct = sum(S1810_C02_055E)/with_disability,
+independent_living_disability = sum(S1810_C02_063E),
+independent_living_disability_pct = sum(S1810_C02_063E)/with_disability
+
+#write out to a csv
+write_csv(branches_disability_summary, "branches_disability_summary.csv")
+
+#get Queens tract-level data on worker occupations                           
+occupations <- get_acs(geography = "tract",
+                       year = 2022, table = c("C24070"),
+                       state = "NY", county = c("Queens"),
+                       survey = "acs5",
+                       geometry = TRUE, output = "wide")
+
+#group data on worker industries by branch census tract assignments
+branches_occupations <- branches %>% left_join(occupations, by="GEOID")
+
+#group data on worker industries by library service area
+branches_occupation_summary <- branches_occupations %>%
+  group_by(Branch) %>%
+  summarize(total_occupation = sum(C24070_001E),
+            agriculture_forestry_fishing_hunting_mining_pct = sum(C24070_002E)/total_occupation,
+            construction_pct = sum(C24070_003E)/total_occupation,
+            manufacturing_pct = sum(C24070_004E)/total_occupation,
+            wholesale_trade_pct = sum(C24070_005E)/total_occupation,
+            retail_trade_pct = sum(C24070_006E)/total_occupation,
+            transportation_warehousing_utilities_pct = sum(C24070_007E)/total_occupation,
+            information_pct = sum(C24070_008E)/total_occupation,
+            finance_insurance_real_estate_rental_leasing_pct = sum(C24070_009E)/total_occupation,
+            professional_scientific_management_adminstrative_waste_management_service_pct = sum(C24070_010E)/total_occupation,
+            educational_services_health_care_social_assistance_pct = sum(C24070_011E)/total_occupation,
+            arts_entertainment_recreation_accomodation_food_services_pct = sum(C24070_012E)/total_occupation,
+            other_service_except_public_administation_pct = sum(C24070_013E)/total_occupation,
+            public_administration_pct = sum(C24070_014E)/total_occupation,
+            agriculture_forestry_fishing_hunting_mining = sum(C24070_002E),
+            construction = sum(C24070_003E),
+            manufacturing = sum(C24070_004E),
+            wholesale_trade = sum(C24070_005E),
+            retail_trade = sum(C24070_006E),
+            transportation_warehousing_utilities = sum(C24070_007E),
+            information = sum(C24070_008E),
+            finance_insurance_real_estate_rental_leasing = sum(C24070_009E),
+            professional_scientific_management_adminstrative_waste_management_service = sum(C24070_010E),
+            educational_services_health_care_social_assistance = sum(C24070_011E),
+            arts_entertainment_recreation_accomodation_food_services = sum(C24070_012E),
+            other_service_except_public_administation = sum(C24070_013E),
+            public_administration = sum(C24070_014E))
+
+
+
+#write to csv file
+write_csv(branches_occupation_summary, "branches_occupation_summary.csv")
+
+#get Queens tract-level data on SNAP recipients                                 
+snap_recipients <- get_acs(geography = "tract",
+                           year = 2022, table = c("S2201"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output = "wide")
+
+#group data on SNAP recipients by branches census tract assignments
+branches_snap_recipients <- branches %>% left_join(snap_recipients, by="GEOID")
+
+#group data on SNAP recipients by library service area
+snap_recipients_summary <- branches_snap_recipients %>%
+  group_by(Branch) %>%
+  summarize(total_snap_recipients = sum(S2201_C01_001E),
+            SNAP_recipients_pct = sum(S2201_C03_001E)/total_snap_recipients,
+            SNAP_recipients = sum(S2201_C03_001E))
+
+#write to csv file
+write_csv(snap_recipients_summary, "snap_recipients_summary.csv")
+
+#get Queens tract-level data of birth countries of foreign-born Queens residents
+birth_countries <- get_acs(geography = "tract",
+                           year = 2022, table = c("B05006"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output = "wide")
+
+branches_birth_countries <- branches %>% left_join(birth_countries, by="GEOID")
+
+birth_countries_summary <- branches_birth_countries %>%
+  group_by(Branch) %>%
+  summarize(total_birth_country_countries = sum(B05006_001E),
+            ireland_pct = sum(B05006_004E)/total_birth_country_countries,
+            denmark_pct = sum(B05006_005E)/total_birth_country_countries,
+            norway_pct = sum(B05006_006E)/total_birth_country_countries,
+            sweden_pct = sum(B05006_007E)/total_birth_country_countries,
+            england_pct = sum(B05006_010E)/total_birth_country_countries,
+            scotland_pct = sum(B05006_011E)/total_birth_country_countries,
+            other_uk_countries_pct = sum(B05006_009E)/total_birth_country_countries,
+            other_north_european_countries_pct = sum(B05006_012E)/total_birth_country_countries,
+            austria_pct = sum(B05006_014E)/total_birth_country_countries,
+            belgium_pct = sum(B05006_015E)/total_birth_country_countries,
+            france_pct = sum(B05006_016E)/total_birth_country_countries,
+            germany_pct = sum(B05006_017E)/total_birth_country_countries,
+            netherlands_pct = sum(B05006_018E)/total_birth_country_countries,
+            switzerland_pct = sum(B05006_019E)/total_birth_country_countries,
+            other_west_european_countries_pct = sum(B05006_020E)/total_birth_country_countries,
+            greece_pct = sum(B05006_022E)/total_birth_country_countries,
+            italy_pct = sum(B05006_023E)/total_birth_country_countries,
+            portugal_pct = sum(B05006_024E)/total_birth_country_countries,
+            azores_islands_pct = sum(B05006_025E)/total_birth_country_countries,
+            spain_pct = sum(B05006_026E)/total_birth_country_countries,
+            other_south_european_countries_pct = sum(B05006_027E)/total_birth_country_countries,
+            albania_pct = sum(B05006_029E)/total_birth_country_countries,
+            belarus_pct = sum(B05006_030E)/total_birth_country_countries,
+            bosnia_and_herzegovina_pct = sum(B05006_031E)/total_birth_country_countries,
+            bulgaria_pct = sum(B05006_032E)/total_birth_country_countries,
+            croatia_pct = sum(B05006_033E)/total_birth_country_countries,
+            czechoslovakia_pct = sum(B05006_034E)/total_birth_country_countries,
+            hungary_pct = sum(B05006_035E)/total_birth_country_countries,
+            latvia_pct = sum(B05006_036E)/total_birth_country_countries,
+            lithuania_pct = sum(B05006_037E)/total_birth_country_countries,
+            north_macedonia_pct = sum(B05006_038E)/total_birth_country_countries,
+            moldova_pct = sum(B05006_039E)/total_birth_country_countries,
+            poland_pct = sum(B05006_040E)/total_birth_country_countries,
+            romania_pct = sum(B05006_041E)/total_birth_country_countries,
+            russia_pct = sum(B05006_042E)/total_birth_country_countries,
+            serbia_pct = sum(B05006_043E)/total_birth_country_countries,
+            ukraine_pct = sum(B05006_044E)/total_birth_country_countries,
+            other_east_european_countries_pct = sum(B05006_045E)/total_birth_country_countries,
+            china_pct = sum(B05006_050E)/total_birth_country_countries,
+            hong_kong_pct = sum(B05006_051E)/total_birth_country_countries,
+            taiwan_pct = sum(B05006_052E)/total_birth_country_countries,
+            japan_pct = sum(B05006_053E)/total_birth_country_countries,
+            korea_pct = sum(B05006_054E)/total_birth_country_countries,
+            other_east_asian_countries_pct = sum(B05006_055E)/total_birth_country_countries,
+            afghanistan_pct = sum(B05006_057E)/total_birth_country_countries,
+            bangladesh_pct = sum(B05006_058E)/total_birth_country_countries,
+            india_pct = sum(B05006_059E)/total_birth_country_countries,
+            iran_pct = sum(B05006_060E)/total_birth_country_countries,
+            kazakhstan_pct = sum(B05006_061E)/total_birth_country_countries,
+            nepal_pct = sum(B05006_062E)/total_birth_country_countries,
+            pakistan_pct = sum(B05006_063E)/total_birth_country_countries,
+            sri_lanka_pct = sum(B05006_064E)/total_birth_country_countries,
+            uzbekistan_pct = sum(B05006_065E)/total_birth_country_countries,
+            other_south_central_asian_countries_pct = sum(B05006_066E)/total_birth_country_countries,
+            burma_pct = sum(B05006_068E)/total_birth_country_countries,
+            cambodia_pct = sum(B05006_069E)/total_birth_country_countries,
+            indonesia_pct = sum(B05006_070E)/total_birth_country_countries,
+            laos_pct = sum(B05006_071E)/total_birth_country_countries,
+            malaysia_pct = sum(B05006_072E)/total_birth_country_countries,
+            philippines_pct = sum(B05006_073E)/total_birth_country_countries,
+            singapore_pct = sum(B05006_074E)/total_birth_country_countries,
+            thailand_pct = sum(B05006_075E)/total_birth_country_countries,
+            vietnam_pct = sum(B05006_076E)/total_birth_country_countries,
+            other_south_east_asian_countries_pct = sum(B05006_077E)/total_birth_country_countries,
+            armenia_pct = sum(B05006_079E)/total_birth_country_countries,
+            iraq_pct = sum(B05006_080E)/total_birth_country_countries,
+            israel_pct = sum(B05006_081E)/total_birth_country_countries,
+            jordan_pct = sum(B05006_082E)/total_birth_country_countries,
+            kuwait_pct = sum(B05006_083E)/total_birth_country_countries,
+            lebanon_pct = sum(B05006_084E)/total_birth_country_countries,
+            saudi_arabia_pct = sum(B05006_085E)/total_birth_country_countries,
+            syria_pct = sum(B05006_086E)/total_birth_country_countries,
+            turkey_pct = sum(B05006_087E)/total_birth_country_countries,
+            yemen_pct = sum(B05006_088E)/total_birth_country_countries,
+            other_west_asian_countries_pct = sum(B05006_089E)/total_birth_country_countries,
+            eritrea_pct = sum(B05006_093E)/total_birth_country_countries,
+            ethiopia_pct = sum(B05006_094E)/total_birth_country_countries,
+            kenya_pct = sum(B05006_095E)/total_birth_country_countries,
+            somalia_pct = sum(B05006_096E)/total_birth_country_countries,
+            uganda_pct = sum(B05006_097E)/total_birth_country_countries,
+            zimbabwe_pct = sum(B05006_098E)/total_birth_country_countries,
+            other_east_african_countries_pct = sum(B05006_099E)/total_birth_country_countries,
+            cameroon_pct = sum(B05006_101E)/total_birth_country_countries,
+            congo_pct = sum(B05006_102E)/total_birth_country_countries,
+            democratic_republic_of_congo_pct = sum(B05006_103E)/total_birth_country_countries,
+            other_middle_african_countries_pct = sum(B05006_104E)/total_birth_country_countries,
+            egypt_pct = sum(B05006_106E)/total_birth_country_countries,
+            morocco_pct = sum(B05006_107E)/total_birth_country_countries,
+            sudan_pct = sum(B05006_108E)/total_birth_country_countries,
+            nepal_pct = sum(B05006_062E)/total_birth_country_countries,
+            other_north_african_countries_pct = sum(B05006_109E)/total_birth_country_countries,
+            south_african_pct = sum(B05006_111E)/total_birth_country_countries,
+            other_south_african_countries_pct = sum(B05006_112E)/total_birth_country_countries,
+            cabo_verde_pct = sum(B05006_114E)/total_birth_country_countries,
+            ghana_pct = sum(B05006_115E)/total_birth_country_countries,
+            liberia_pct = sum(B05006_116E)/total_birth_country_countries,
+            nigeria_pct = sum(B05006_117E)/total_birth_country_countries,
+            senegal_pct = sum(B05006_118E)/total_birth_country_countries,
+            sierra_leone_pct = sum(B05006_119E)/total_birth_country_countries,
+            other_west_african_countries_pct = sum(B05006_120E)/total_birth_country_countries,
+            australia_pct = sum(B05006_124E)/total_birth_country_countries,
+            new_zealand_and_other_australasia_countries_pct = sum(B05006_125E)/total_birth_country_countries,
+            fiji_pct = sum(B05006_126E)/total_birth_country_countries,
+            micronesia_pct = sum(B05006_127E)/total_birth_country_countries,
+            bahamas_pct = sum(B05006_132E)/total_birth_country_countries,
+            barbados_pct = sum(B05006_133E)/total_birth_country_countries,
+            cuba_pct = sum(B05006_134E)/total_birth_country_countries,
+            dominica_pct = sum(B05006_135E)/total_birth_country_countries,
+            dominican_republic_pct = sum(B05006_136E)/total_birth_country_countries,
+            grenada_pct = sum(B05006_137E)/total_birth_country_countries,
+            haiti_pct = sum(B05006_138E)/total_birth_country_countries,
+            jamaica_pct = sum(B05006_139E)/total_birth_country_countries,
+            st_vincent_and_the_grenadines_pct = sum(B05006_140E)/total_birth_country_countries,
+            trinidad_and_tobago_pct = sum(B05006_141E)/total_birth_country_countries,
+            west_indies_pct = sum(B05006_142E)/total_birth_country_countries,
+            other_caribbean_countries_pct = sum(B05006_143E)/total_birth_country_countries,
+            belize_pct = sum(B05006_145E)/total_birth_country_countries,
+            costa_rica_pct = sum(B05006_146E)/total_birth_country_countries,
+            el_salvador_pct = sum(B05006_147E)/total_birth_country_countries,
+            guatemala_pct = sum(B05006_148E)/total_birth_country_countries,
+            honduras_pct = sum(B05006_149E)/total_birth_country_countries,
+            mexico_pct = sum(B05006_150E)/total_birth_country_countries,
+            nicaragua_pct = sum(B05006_151E)/total_birth_country_countries,
+            panama_pct = sum(B05006_152E)/total_birth_country_countries,
+            other_central_american_countries_pct = sum(B05006_153E)/total_birth_country_countries,
+            argentina_pct = sum(B05006_155E)/total_birth_country_countries,
+            bolivia_pct = sum(B05006_156E)/total_birth_country_countries,
+            brazil_pct = sum(B05006_157E)/total_birth_country_countries,
+            chile_pct = sum(B05006_158E)/total_birth_country_countries,
+            colombia_pct = sum(B05006_159E)/total_birth_country_countries,
+            ecuador_pct = sum(B05006_160E)/total_birth_country_countries,
+            guyana_pct = sum(B05006_161E)/total_birth_country_countries,
+            peru_pct = sum(B05006_162E)/total_birth_country_countries,
+            uruguay_pct = sum(B05006_163E)/total_birth_country_countries,
+            venezuela_pct = sum(B05006_164E)/total_birth_country_countries,
+            other_south_american_countries_pct = sum(B05006_165E)/total_birth_country_countries,
+            canada_pct = sum(B05006_167E)/total_birth_country_countries,
+            other_north_american_countries_pct = sum(B05006_168E)/total_birth_country_countries,
+            ireland = sum(B05006_004E),
+            denmark = sum(B05006_005E),
+            norway = sum(B05006_006E),
+            sweden = sum(B05006_007E),
+            england = sum(B05006_010E),
+            scotland = sum(B05006_011E),
+            other_uk_countries = sum(B05006_009E),
+            other_north_european_countries = sum(B05006_012E),
+            austria = sum(B05006_014E),
+            belgium = sum(B05006_015E),
+            france = sum(B05006_016E),
+            germany = sum(B05006_017E),
+            netherlands = sum(B05006_018E),
+            switzerland = sum(B05006_019E),
+            other_west_european_countries = sum(B05006_020E),
+            greece = sum(B05006_022E),
+            italy = sum(B05006_023E),
+            portugal = sum(B05006_024E),
+            azores_islands = sum(B05006_025E),
+            spain = sum(B05006_026E),
+            other_south_european_countries = sum(B05006_027E),
+            albania = sum(B05006_029E),
+            belarus = sum(B05006_030E),
+            bosnia_and_herzegovina = sum(B05006_031E),
+            bulgaria = sum(B05006_032E),
+            croatia = sum(B05006_033E),
+            czechoslovakia = sum(B05006_034E),
+            hungary = sum(B05006_035E),
+            latvia = sum(B05006_036E),
+            lithuania = sum(B05006_037E),
+            north_macedonia = sum(B05006_038E),
+            moldova = sum(B05006_039E),
+            poland = sum(B05006_040E),
+            romania = sum(B05006_041E),
+            russia = sum(B05006_042E),
+            serbia = sum(B05006_043E),
+            ukraine = sum(B05006_044E),
+            other_east_european_countries = sum(B05006_045E),
+            china = sum(B05006_050E),
+            hong_kong = sum(B05006_051E),
+            taiwan = sum(B05006_052E),
+            japan = sum(B05006_053E),
+            korea = sum(B05006_054E),
+            other_east_asian_countries = sum(B05006_055E),
+            afghanistan = sum(B05006_057E),
+            bangladesh = sum(B05006_058E),
+            india = sum(B05006_059E),
+            iran = sum(B05006_060E),
+            kazakhstan = sum(B05006_061E),
+            nepal = sum(B05006_062E),
+            pakistan = sum(B05006_063E),
+            sri_lanka = sum(B05006_064E),
+            uzbekistan = sum(B05006_065E),
+            other_south_central_asian_countries = sum(B05006_066E),
+            burma = sum(B05006_068E),
+            cambodia = sum(B05006_069E),
+            indonesia = sum(B05006_070E),
+            laos = sum(B05006_071E),
+            malaysia = sum(B05006_072E),
+            philippines = sum(B05006_073E),
+            singapore = sum(B05006_074E),
+            thailand = sum(B05006_075E),
+            vietnam = sum(B05006_076E),
+            other_south_east_asian_countries = sum(B05006_077E),
+            armenia = sum(B05006_079E),
+            iraq = sum(B05006_080E),
+            israel = sum(B05006_081E),
+            jordan = sum(B05006_082E),
+            kuwait = sum(B05006_083E),
+            lebanon = sum(B05006_084E),
+            saudi_arabia = sum(B05006_085E),
+            syria = sum(B05006_086E),
+            turkey = sum(B05006_087E),
+            yemen = sum(B05006_088E),
+            other_west_asian_countries = sum(B05006_089E),
+            eritrea = sum(B05006_093E),
+            ethiopia = sum(B05006_094E),
+            kenya = sum(B05006_095E),
+            somalia = sum(B05006_096E),
+            uganda = sum(B05006_097E),
+            zimbabwe = sum(B05006_098E),
+            other_east_african_countries = sum(B05006_099E),
+            cameroon = sum(B05006_101E),
+            congo = sum(B05006_102E),
+            democratic_republic_of_congo = sum(B05006_103E),
+            other_middle_african_countries = sum(B05006_104E),
+            egypt = sum(B05006_106E),
+            morocco = sum(B05006_107E),
+            sudan = sum(B05006_108E),
+            other_north_african_countries = sum(B05006_109E),
+            south_african = sum(B05006_111E),
+            other_south_african_countries = sum(B05006_112E),
+            cabo_verde = sum(B05006_114E),
+            ghana = sum(B05006_115E),
+            liberia = sum(B05006_116E),
+            nigeria = sum(B05006_117E),
+            senegal = sum(B05006_118E),
+            sierra_leone = sum(B05006_119E),
+            other_west_african_countries = sum(B05006_120E),
+            australia = sum(B05006_124E),
+            new_zealand_and_other_australasia_countries = sum(B05006_125E),
+            fiji = sum(B05006_126E),
+            micronesia = sum(B05006_127E),
+            bahamas = sum(B05006_132E),
+            barbados = sum(B05006_133E),
+            cuba = sum(B05006_134E),
+            dominica = sum(B05006_135E),
+            dominican_republic = sum(B05006_136E),
+            grenada = sum(B05006_137E),
+            haiti = sum(B05006_138E),
+            jamaica = sum(B05006_139E),
+            st_vincent_and_the_grenadines = sum(B05006_140E),
+            trinidad_and_tobago = sum(B05006_141E),
+            west_indies = sum(B05006_142E),
+            other_caribbean_countries = sum(B05006_143E),
+            belize = sum(B05006_145E),
+            costa_rica = sum(B05006_146E),
+            el_salvador = sum(B05006_147E),
+            guatemala = sum(B05006_148E),
+            honduras = sum(B05006_149E),
+            mexico = sum(B05006_150E),
+            nicaragua = sum(B05006_151E),
+            panama = sum(B05006_152E),
+            other_central_american_countries = sum(B05006_153E),
+            argentina = sum(B05006_155E),
+            bolivia = sum(B05006_156E),
+            brazil = sum(B05006_157E),
+            chile = sum(B05006_158E),
+            colombia = sum(B05006_159E),
+            ecuador = sum(B05006_160E),
+            guyana = sum(B05006_161E),
+            peru = sum(B05006_162E),
+            uruguay = sum(B05006_163E),
+            venezuela = sum(B05006_164E),
+            other_south_american_countries = sum(B05006_165E),
+            canada = sum(B05006_167E),
+            other_north_american_countries = sum(B05006_168E))
+
+
+write.csv(birth_countries_summary, "birth_countries.csv")
+
+#getting denominators
+denom_pop <- get_acs(geography = "tract",
+                     year = 2021, table = c("B01003"),
+                     state = "NY", county = c("Queens"),
+                     survey = "acs5",
+                     geometry = TRUE, output = "wide")
+
+denom_pop_5_and_over <- get_acs(geography = "tract",
+                                year = 2021, table = c("B16004"),
+                                state = "NY", county = c("Queens"),
+                                survey = "acs5",
+                                geometry = TRUE, output = "wide")
+
+
+
+#population ages 25 and older
+denom_pop_25_and_over <- get_acs(geography = "tract",
+                                 year = 2021, table = c("B15003"),
+                                 state = "NY", county = c("Queens"),
+                                 survey = "acs5",
+                                 geometry = TRUE, output = "wide")
+
+denom_pop_poverty <- get_acs(geography = "tract",
+                             year = 2021, table = c("B17020"),
+                             state = "NY", county = c("Queens"),
+                             survey = "acs5",
+                             geometry = TRUE, output = "wide")
+
+denom_hh <- get_acs(geography = "tract",
+                    year = 2021, table = c("B11012"),
+                    state = "NY", county = c("Queens"),
+                    survey = "acs5",
+                    geometry = TRUE, output = "wide")
+
+denom_family_hh <- get_acs(geography = "tract",
+                           year = 2021, table = c("B11003"),
+                           state = "NY", county = c("Queens"),
+                           survey = "acs5",
+                           geometry = TRUE, output = "wide")
+
+denom_perc_of_pop_18_and_over <- get_acs(geography = "tract",
+                                         year = 2021, table = c("B21001"),
+                                         state = "NY", county = c("Queens"),
+                                         survey = "acs5",
+                                         geometry = TRUE, output = "wide")
+
+denom_total_civilian_noninstitutionalized_population <- get_acs(geography = "tract",
+                                                                year = 2021, table = c("S1810"),
+                                                                state = "NY", county = c("Queens"),
+                                                                survey = "acs5",
+                                                                geometry = TRUE, output = "wide")
+
+#group by branch
+branches_denom <- branches %>% 
+  left_join(denom_total_civilian_noninstitutionalized_population, by="GEOID") %>%
+  left_join(denom_perc_of_pop_18_and_over, by="GEOID") %>%
+  left_join(denom_family_hh, by="GEOID") %>%
+  left_join(denom_hh, by="GEOID") %>%
+  left_join(denom_pop_poverty, by="GEOID") %>%
+  left_join(denom_pop_25_and_over, by="GEOID") %>%
+  left_join(denom_pop_5_and_over, by="GEOID") %>%
+  left_join(denom_pop, by="GEOID")
+
+#group by library service area
+denom_summary <- branches_denom %>%
+  group_by(Branch) %>%
+  summarize(total_population_denom = sum(B01003_001E),
+            population_5_and_over = sum(B16004_001E),
+            population_25_and_over = sum(B15003_001E),
+            population_poverty = sum(B17020_001E),
+            households = sum(B11012_001E),
+            family_households = sum(B11003_001E),
+            perc_of_pop_18_and_over = sum(B21001_001E),
+            total_civ_noninstitutionalized_pop = sum(S1810_C01_001E))
+
+#write to csv file
+write_csv(denom_summary, "denom_summary.csv")
+
+
+
+
+
+#Same Sex Marriage
+marriage <- get_acs(geography = "tract",
+                    year = 2022, table = c("B11009"),
+                    state = "NY", county = c("Queens"),
+                    survey = "acs5",
+                    geometry = TRUE, output = "wide")
+
+branches <- branches %>% mutate(GEOID=as.character(GEOID))
+branch_marriage<- branches %>%
+  left_join(marriage, by = "GEOID")
+
+
+
+branch_marraige_summary <- branch_marriage %>%
+  group_by(Branch) %>%
+  summarize(total_marriages = sum(B11009_002E),
+            same_sex_marriage = sum(B11009_004E),
+            same_sex_marriage_pct = same_sex_marriage/total_marriages,
+            cohabitating_couple_hh = sum(B11009_007E),
+            same_sex_cohabitating_couple_hh = sum(B11009_009E),
+            same_sex_cohabitating_couple_hh_pct = same_sex_cohabitating_couple_hh/same_sex_cohabitating_couple_hh)
+
+
+
+write.csv(branch_marraige_summary, "branches_marraige_summary.csv")
+
+
+#occupation
+occupation <- get_acs(geography = "tract",
+                      year = 2022, table = c("C24010"),
+                      state = "NY", county = c("Queens"),
+                      survey = "acs5",
+                      geometry = TRUE, output = "wide")
+
+branch <- branches %>% mutate(GEOID=as.character(GEOID))
+branch_occupation<- branch %>%
+  left_join(occupation, by = "GEOID")
+
+
+
+branch_occupation_summary <- branch_occupation %>%
+  group_by(Branch) %>%
+  summarize(total_occupation = sum(C24010_001E),
+            managment_business_science_arts_ocp = sum(C24010_003E, C24010_039E),
+            managment_business_science_arts_ocp_pct = managment_business_science_arts_ocp/total_occupation,
+            service_ocp = sum(C24010_019E, C24010_055E),
+            service_ocp_pct = service_ocp/total_occupation,
+            sales_office_ocp = sum(C24010_027E, C24010_063E),
+            sales_office_ocp_pct = sales_office_ocp/total_occupation,
+            natural_resources_construction_maintenance_ocp = sum(C24010_030E, C24010_066E),
+            natural_resources_construction_maintenance_ocp_pct = natural_resources_construction_maintenance_ocp/total_occupation,
+            production_transportation_maintenance = sum(C24010_034E, C24010_070E),
+            production_transportation_maintenance = production_transportation_maintenance/total_occupation,
+  )
+
+write.csv(branch_occupation_summary, "branch_occupation_summary.csv")
+
+
+#worked from home
+work_from_home_industry <- get_acs(geography = "tract",
+                      year = 2022, table = c("B08126"),
+                      state = "NY", county = c("Queens"),
+                      survey = "acs5",
+                      geometry = TRUE, output = "wide")
+
+
+branch_wfh_industry<- branch %>%
+  left_join(work_from_home_industry, by = "GEOID")
+
+branch_wfh_industry_summary <- branch_wfh_industry %>%
+  group_by(Branch) %>%
+  summarize(total = sum(B08126_091E),
+            Agriculture_forestry_fishingandhunting_mining = sum(B08126_092E),
+            Agriculture_forestry_fishingandhunting_mining_pct = Agriculture_forestry_fishingandhunting_mining/total,
+            construction = sum(B08126_093E),
+            construction_pct = construction/total,
+            manufacturing = sum(B08126_094E),
+            manufacturing_pct = manufacturing/total,
+            wholesale_trade = sum(B08126_095E),
+            wholesale_trade_pct = wholesale_trade/total,
+            retail_trade = sum(B08126_096E),
+            retail_trade_pct = retail_trade/total,
+            transportation_warehousing_utilities = sum(B08126_097E),
+            transportation_warehousing_utilities_pct= transportation_warehousing_utilities/total,
+            information = sum(B08126_098E),
+            information_pct = information/total,
+            financeandinsurance_real_estate_rental_leasing= sum(B08126_099E),
+            financeandinsurance_real_estate_rental_leasing_pct = financeandinsurance_real_estate_rental_leasing/total,
+            Professional_scientific_and_management_administrativeandwaste_management_services = sum(B08126_100E),
+            Professional_scientific_and_management_administrativeandwaste_management_services_pct = Professional_scientific_and_management_administrativeandwaste_management_services/total,
+            Educational_services_and_health_care_and_social_assistance = sum(B08126_101E),
+            Educational_services_and_health_care_and_social_assistance_pct = Educational_services_and_health_care_and_social_assistance/total,
+            Arts_entertainment_recreation_accommodation_food_services = sum(B08126_102E),
+            Arts_entertainment_recreation_accommodation_food_services_pct = Arts_entertainment_recreation_accommodation_food_services/total,
+            Other_services_except_public_administration = sum(B08126_103E),
+            Other_services_except_public_administration_pct = Other_services_except_public_administration/total,
+            public_administration = sum(B08126_104E),
+            public_administration_pct = public_administration/total,
+            armed_forces = sum(B08126_105E),
+            armed_forces_pct = armed_forces/total
+  )
+
+queens_wfh_industry_summary <- work_from_home_industry %>%
+  summarize(total = sum(B08126_091E),
+            Agriculture_forestry_fishingandhunting_mining = sum(B08126_092E),
+            Agriculture_forestry_fishingandhunting_mining_pct = Agriculture_forestry_fishingandhunting_mining/total,
+            construction = sum(B08126_093E),
+            construction_pct = construction/total,
+            manufacturing = sum(B08126_094E),
+            manufacturing_pct = manufacturing/total,
+            wholesale_trade = sum(B08126_095E),
+            wholesale_trade_pct = wholesale_trade/total,
+            retail_trade = sum(B08126_096E),
+            retail_trade_pct = retail_trade/total,
+            transportation_warehousing_utilities = sum(B08126_097E),
+            transportation_warehousing_utilities_pct= transportation_warehousing_utilities/total,
+            information = sum(B08126_098E),
+            information_pct = information/total,
+            financeandinsurance_real_estate_rental_leasing= sum(B08126_099E),
+            financeandinsurance_real_estate_rental_leasing_pct = financeandinsurance_real_estate_rental_leasing/total,
+            Professional_scientific_and_management_administrativeandwaste_management_services = sum(B08126_100E),
+            Professional_scientific_and_management_administrativeandwaste_management_services_pct = Professional_scientific_and_management_administrativeandwaste_management_services/total,
+            Educational_services_and_health_care_and_social_assistance = sum(B08126_101E),
+            Educational_services_and_health_care_and_social_assistance_pct = Educational_services_and_health_care_and_social_assistance/total,
+            Arts_entertainment_recreation_accommodation_food_services = sum(B08126_102E),
+            Arts_entertainment_recreation_accommodation_food_services_pct = Arts_entertainment_recreation_accommodation_food_services/total,
+            Other_services_except_public_administration = sum(B08126_103E),
+            Other_services_except_public_administration_pct = Other_services_except_public_administration/total,
+            public_administration = sum(B08126_104E),
+            public_administration_pct = public_administration/total,
+            armed_forces = sum(B08126_105E),
+            armed_forces_pct = armed_forces/total
+  )
+
+write.csv(queens_wfh_industry_summary, "queens_wfh_summary.csv")
+
+write.csv(branch_wfh_industry_summary, "wfh_industry_summary.csv")
+
+#Joining all Files
+library(tidyverse)
+library("purrr")
+data_join <- list.files(path = "C:/Users/Matthew.Magiera/Documents/QPL Projects/QPL Census/Wide Formats", # Identify all CSV files
+                        pattern = "*.csv", full.names = TRUE) %>% 
+  lapply(read_csv) %>%                              # Store all files in list
+  reduce(left_join, by = "Branch")                      # Full-join data sets into one data set 
+     
+
+write.csv(data_join, "merged_csv_files.csv")
