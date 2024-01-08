@@ -91,20 +91,20 @@ branches_race <- branches %>% left_join(race, by="GEOID")
 branches_race_summary <- branches_race %>%
   group_by(Branch) %>%
   summarize(total_race_population = sum(B02001_001E),
-            white = sum(B02001_002E),
-            white_pct = sum(B02001_002E)/total_race_population,
-            black = sum(B02001_003E),
-            black_pct = sum(B02001_003E)/total_race_population,
-            asian = sum(B02001_003E),
-            asian_pct = sum(B02001_003E)/total_race_population,
-            american_indian_alaskan_native = sum(B02001_004E),
-            american_indian_alaskan_native_pct = sum(B02001_004E)/total_race_population,
-            native_hawaiian_other_pacific_islander = sum(B02001_006E),
-            native_hawaiian_other_pacific_islander_pct = sum(B02001_006E)/total_race_population,
-            some_other_race = sum(B02001_007E),
-            some_other_race_pct = sum(B02001_007E)/total_race_population,
-            two_or_more_races = sum(B02001_008E),
-            two_or_more_races_pct = sum(B02001_008E)/total_race_population)
+            white_alone = sum(B02001_002E),
+            white_pct_alone = sum(B02001_002E)/total_race_population,
+            black_alone = sum(B02001_003E),
+            black_alone_pct = sum(B02001_003E)/total_race_population,
+            asian_alone = sum(B02001_005E),
+            asian_alone_pct = sum(B02001_005E)/total_race_population,
+            american_indian_alaskan_native_alone = sum(B02001_004E),
+            american_indian_alaskan_native_pct_alone = sum(B02001_004E)/total_race_population,
+            native_hawaiian_other_pacific_islander_alone = sum(B02001_006E),
+            native_hawaiian_other_pacific_islander_pct_alone = sum(B02001_006E)/total_race_population,
+            some_other_race_alone = sum(B02001_007E),
+            some_other_race_pct_alone = sum(B02001_007E)/total_race_population,
+            two_or_more_races_alone = sum(B02001_008E),
+            two_or_more_races_pct_alone = sum(B02001_008E)/total_race_population)
 
 #save to csv
 write.csv(branches_race_summary, "branches_race_summary.csv")
@@ -158,10 +158,10 @@ branches_non_hispanic_summary <- branches_non_hispanic %>%
             asian_nonhispanic_pct = sum(B03002_006E)/total_nonhispanic,
             native_hawaiian_nonhispanic = sum(B03002_007E),
 native_hawaiian_nonhispanic_pct = sum(B03002_007E)/total_nonhispanic,
-some_other_race = sum(B03002_008E),
-some_other_race_pct = sum(B03002_008E)/total_nonhispanic,
-two_or_more_races = sum(B03002_009E),
-two_or_more_races_pct = sum(B03002_009E)/total_nonhispanic,
+some_other_race_nonhispanic = sum(B03002_008E),
+some_other_race_pct_nonhispanic = sum(B03002_008E)/total_nonhispanic,
+two_or_more_races_nonhispanic = sum(B03002_009E),
+two_or_more_races_pct_nonhispanic = sum(B03002_009E)/total_nonhispanic,
             hispanic = sum(B03002_012E),
             hispanic_pct= sum(B03002_012E)/total_nonhispanic)
 
