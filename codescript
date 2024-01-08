@@ -110,32 +110,8 @@ branches_race_summary <- branches_race %>%
 write.csv(branches_race_summary, "branches_race_summary.csv")
 
 
-#get tract-level data on population hispanic or latino origin
-hispanic <- get_acs(geography = "tract",
-                    year = 2022, table = c("B03003"),
-                    state = "NY", county = c("Queens"),
-                    survey = "acs5",
-                    geometry = TRUE, output="wide")
-
-
-#group data on hispanic/latino origin population by branch census tract assignments
-branches_hispanic <- branches %>% left_join(hispanic, by="GEOID")     
-
-#group data on hispanic/latino origin population by library service area
-branches_hispanic_summary <- branches_hispanic %>%
-  group_by(Branch) %>%
-  summarize(total_population_hispanic_table = sum(B03003_001E),
-            hispanic = sum(B03003_003E),
-            hispanic_pct = sum(B03003_003E)/total_population_hispanic_table)
-
-
-
-#write to csv file
-write.csv(branches_hispanic_summary, "hispanic_summary.csv")
-
-
 #get tract-level data on non hispanic or latino races
-non_hispanic <- get_acs(geography = "tract",
+hispanic_and_non_hispanic <- get_acs(geography = "tract",
                           year = 2022, table = c("B03002"),
                           state = "NY", county = c("Queens"),
                           survey = "acs5",
@@ -143,13 +119,13 @@ non_hispanic <- get_acs(geography = "tract",
 
 #group data on non hispanic by branch census tract assignments
 branches <- branches %>% mutate(GEOID=as.character(GEOID))
-branches_non_hispanic <- branches %>% left_join(non_hispanic, by="GEOID")
+branches_hispanic_and_non_hispanic <- branches %>% left_join(hispanic_and_non_hispanic, by="GEOID")
 
 
 #group data by on hispanic or latino origin by library service area
-branches_non_hispanic_summary <- branches_non_hispanic %>%
+branches_hispanic_non_hispanic_summary <- branches_hispanic_and_non_hispanic %>%
   group_by(Branch) %>%
-  summarize(total_nonhispanic = sum(B03002_001E),
+  summarize(total_nonhispanic = sum(B03002_002E),
             white_nonhispanic = sum(B03002_003E),
             white_nonhispanic_pct = sum(B03002_003E)/total_nonhispanic,
             black_nonhispanic = sum(B03002_004E),
@@ -163,10 +139,10 @@ some_other_race_pct_nonhispanic = sum(B03002_008E)/total_nonhispanic,
 two_or_more_races_nonhispanic = sum(B03002_009E),
 two_or_more_races_pct_nonhispanic = sum(B03002_009E)/total_nonhispanic,
             hispanic = sum(B03002_012E),
-            hispanic_pct= sum(B03002_012E)/total_nonhispanic)
+            hispanic_pct= sum(B03002_012E)/sum(B03001_001E))
 
 
-write.csv(branches_race_summary, "branches_race_summary.csv")
+write.csv(branches_hispanic_non_hispanic_summary, "branches_hispanic_non_hispanic_summary.csv")
 
 #get tract-level data on age distribution in Queens
 ages <- get_acs(geography = "tract",
